@@ -6,3 +6,5 @@ out/
 .DS_Store
 tsconfig.tsbuildinfo
 next-env.d.ts
+.e2e-*.png
+.e2e-*.jpg
