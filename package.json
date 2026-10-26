@@ -1,0 +1,30 @@
+{
+  "name": "excalibur-earth",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Excalibur: Earth — Earth is the server. A real-Earth 3D web MMO. Lagos first.",
+  "scripts": {
+    "dev": "next dev -p 3100",
+    "build": "next build",
+    "start": "next start -p 3100",
+    "lint": "next lint",
+    "bake:earth": "bun scripts/bake-earth.ts",
+    "bake:city": "bun scripts/bake-city.ts"
+  },
+  "dependencies": {
+    "next": "^16.0.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "three": "^0.182.0",
+    "z-ai-web-dev-sdk": "^0.0.10"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@types/three": "^0.181.0",
+    "topojson-client": "^3.1.0",
+    "typescript": "^5.9.0",
+    "world-atlas": "^2.0.2"
+  }
+}
