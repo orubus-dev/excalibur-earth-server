@@ -12,6 +12,9 @@
     "bake:city": "bun scripts/bake-city.ts"
   },
   "dependencies": {
+    "@babylonjs/core": "^8",
+    "@babylonjs/havok": "^1",
+    "@babylonjs/loaders": "^8",
     "next": "^16.0.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

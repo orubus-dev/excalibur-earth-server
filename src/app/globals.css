@@ -182,3 +182,9 @@ html, body {
 .load-bar i { display: block; height: 100%; background: var(--gold); transition: width 0.3s ease; }
 
 .fps-corner { position: absolute; left: 14px; top: max(64px, calc(env(safe-area-inset-top) + 58px)); font-size: 10px; color: rgba(255,255,255,0.4); }
+
+/* look-drag zone (right half, behind action buttons) */
+.look-zone {
+  position: absolute; top: 25%; bottom: 0; right: 0; width: 55%;
+  pointer-events: auto; touch-action: none;
+}

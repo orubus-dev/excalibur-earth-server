@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Engine, HudState } from '@/game/engine';
+import type { GameEngine, HudState } from '@/game/babylon/engine';
 
 interface SheetMsg { role: 'you' | 'them'; text: string }
 
@@ -12,9 +12,10 @@ const BOOT_HUD: HudState = {
 
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const engineRef = useRef<Engine | null>(null);
+  const engineRef = useRef<GameEngine | null>(null);
   const mapRef = useRef<HTMLCanvasElement | null>(null);
   const joyRef = useRef<HTMLDivElement | null>(null);
+  const lookRef = useRef<HTMLDivElement | null>(null);
   const [hud, setHud] = useState<HudState>(BOOT_HUD);
   const [sheet, setSheet] = useState<{ open: boolean; name: string; log: SheetMsg[]; busy: boolean }>({
     open: false, name: '', log: [], busy: false
@@ -24,19 +25,13 @@ export default function Home() {
   /* boot engine once */
   useEffect(() => {
     if (!canvasRef.current || engineRef.current) return;
-    let EngineCtor: typeof Engine | null = null;
     let killed = false;
     (async () => {
-      const mod = await import('@/game/engine');
-      EngineCtor = mod.Engine;
+      const mod = await import('@/game/babylon/engine');
       if (killed || !canvasRef.current) return;
-      engineRef.current = new EngineCtor(canvasRef.current, {
-        onHud: s => setHud(s),
-        onNpcTalk: name => openSheet(name)
-      });
+      engineRef.current = new mod.GameEngine(canvasRef.current, { onHud: s => setHud(s) });
     })();
     return () => { killed = true; engineRef.current?.dispose(); engineRef.current = null; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* minimap painter */
@@ -55,27 +50,57 @@ export default function Home() {
     return () => cancelAnimationFrame(raf);
   }, [hud.mode]);
 
-  /* joystick */
+  /* joystick — turns the camera; push up/down walks. Attached per hud render (fixes the dead-stick bug). */
   useEffect(() => {
     const zone = joyRef.current;
     if (!zone) return;
-    const knob = zone.querySelector('.joy-knob') as HTMLDivElement;
+    const knob = zone.querySelector('.joy-knob') as HTMLDivElement | null;
     let active = false;
-    const set = (dx: number, dy: number): void => {
-      const R = 44;
-      const v = { x: dx / R, z: dy / R };
-      const m = Math.hypot(v.x, v.z);
-      const k = m > 1 ? 1 / m : 1;
-      engineRef.current?.setJoystick(v.x * k, v.z * k);
-      knob.style.transform = `translate(calc(-50% + ${dx * k}px), calc(-50% + ${dy * k}px))`;
+    let pid = -1;
+    const R = 46;
+    const apply = (dx: number, dy: number): void => {
+      const m = Math.hypot(dx, dy);
+      const k = m > R ? R / m : 1;
+      const nx = dx * k / R, ny = dy * k / R;
+      engineRef.current?.setJoystick(nx, ny);
+      if (knob) knob.style.transform = `translate(calc(-50% + ${dx * k}px), calc(-50% + ${dy * k}px))`;
     };
     const fromEvent = (e: PointerEvent): void => {
       const r = zone.getBoundingClientRect();
-      set(e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2));
+      apply(e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2));
     };
-    const down = (e: PointerEvent): void => { active = true; zone.setPointerCapture(e.pointerId); fromEvent(e); };
-    const move = (e: PointerEvent): void => { if (active) fromEvent(e); };
-    const up = (): void => { active = false; set(0, 0); };
+    const down = (e: PointerEvent): void => {
+      active = true; pid = e.pointerId;
+      zone.setPointerCapture(e.pointerId);
+      fromEvent(e);
+    };
+    const move = (e: PointerEvent): void => { if (active && e.pointerId === pid) fromEvent(e); };
+    const up = (): void => { active = false; pid = -1; apply(0, 0); };
+    zone.addEventListener('pointerdown', down);
+    zone.addEventListener('pointermove', move);
+    zone.addEventListener('pointerup', up);
+    zone.addEventListener('pointercancel', up);
+    return () => {
+      zone.removeEventListener('pointerdown', down);
+      zone.removeEventListener('pointermove', move);
+      zone.removeEventListener('pointerup', up);
+      zone.removeEventListener('pointercancel', up);
+      engineRef.current?.setJoystick(0, 0);
+    };
+  }, [hud.mode]);
+
+  /* right-side look drag (also orbits the camera) */
+  useEffect(() => {
+    const zone = lookRef.current;
+    if (!zone) return;
+    let active = false;
+    const down = (e: PointerEvent): void => {
+      active = true;
+      zone.setPointerCapture(e.pointerId);
+      engineRef.current?.lookDragStart(e.clientX, e.clientY);
+    };
+    const move = (e: PointerEvent): void => { if (active) engineRef.current?.lookDragMove(e.clientX, e.clientY); };
+    const up = (): void => { active = false; engineRef.current?.lookDragEnd(); };
     zone.addEventListener('pointerdown', down);
     zone.addEventListener('pointermove', move);
     zone.addEventListener('pointerup', up);
@@ -86,7 +111,7 @@ export default function Home() {
       zone.removeEventListener('pointerup', up);
       zone.removeEventListener('pointercancel', up);
     };
-  }, []);
+  }, [hud.mode]);
 
   const openSheet = useCallback((name: string) => {
     setSheet({ open: true, name, log: [{ role: 'them', text: `Yes! How I go help you?` }], busy: false });
@@ -170,6 +195,7 @@ export default function Home() {
           {hud.hint && <div className="hint-toast">{hud.hint}</div>}
 
           <div className="joy" ref={joyRef}><div className="joy-knob" /></div>
+          <div className="look-zone" ref={lookRef} />
 
           <div className="actions">
             {hud.nearNpc && (
@@ -178,10 +204,11 @@ export default function Home() {
               </button>
             )}
             <button
-              className={`act-btn ${hud.mode === 'city' ? '' : ''}`}
+              className="act-btn"
               onPointerDown={() => engineRef.current?.setSprint(true)}
               onPointerUp={() => engineRef.current?.setSprint(false)}
               onPointerLeave={() => engineRef.current?.setSprint(false)}
+              onPointerCancel={() => engineRef.current?.setSprint(false)}
             >
               RUN
             </button>
