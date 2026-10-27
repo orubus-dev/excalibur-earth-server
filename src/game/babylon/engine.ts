@@ -16,6 +16,7 @@ import { Environment } from './environment';
 import { loadCharacterKit, type Actor, type CharacterKit } from './actors';
 import { Traffic } from './traffic';
 import { Citizens } from './citizens';
+import { PostFX } from './postfx';
 import { latLonToLocal } from '@/game/geo';
 import { LAGOS } from '@/lib/osm';
 
@@ -70,6 +71,7 @@ export class GameEngine {
   private disposed = false;
   private isMobile: boolean;
   private shadowProxy: Mesh | null = null;
+  private postfx: PostFX | null = null;
 
   constructor(canvas: HTMLCanvasElement, hooks: EngineHooks) {
     this.canvas = canvas;
@@ -85,6 +87,7 @@ export class GameEngine {
     this.globe = new Globe(this.scene, canvas.parentElement ?? canvas);
     this.world = new World(this.scene, this.env);
     this.traffic = new Traffic(this.scene, this.world);
+    try { this.postfx = new PostFX(this.scene, this.isMobile); } catch (e) { console.warn('[postfx] unavailable', e); }
 
     window.addEventListener('resize', this.resize);
     window.addEventListener('keydown', this.onKey);
@@ -218,6 +221,9 @@ export class GameEngine {
       this.globe.tick(t);
     } else if (this.mode === 'loading' || this.mode === 'city') {
       this.cityTick(dt);
+    }
+    if (this.postfx && (this.mode === 'city' || this.mode === 'loading')) {
+      this.postfx.update(this.camPos, new Vector3(this.pPos.x, this.pPos.y + 1.2, this.pPos.z), this.fps);
     }
     this.scene.render();
 
@@ -419,6 +425,7 @@ export class GameEngine {
     window.removeEventListener('resize', this.resize);
     window.removeEventListener('keydown', this.onKey);
     window.removeEventListener('keyup', this.onKeyUp);
+    this.postfx?.dispose();
     this.citizens?.dispose();
     this.world.dispose();
     this.globe.dispose();
